@@ -17,12 +17,11 @@ class InstagramSpider(scrapy.Spider):
     inst_login = 'flatsstore@yandex.ru'
     inst_pwd = '#PWD_INSTAGRAM_BROWSER:10:1593495385:AYRQAGuGiRsGGb+6c4g59rIT5NpB5FVnWWrXH2bjnM47qnhIxlnmwgK8hntULis4OUnvK0nO2Wf8D1xy5RmJCkcT9N+dNXctKyNTZI8mnKp6ZJDGpSvuHbirp+S+8qRgUwjMyh9+RhpfLXQDVg+WjWLTIk6W'
     login_url = 'https://www.instagram.com/accounts/login/ajax/'
-    parse_user = 'nikolaiiuzeev'
+
     post_hash = 'eddbde960fed6bde675388aac39a3657'
     graphql_url = 'https://www.instagram.com/graphql/query/?'
     follower_hash = 'c76146de99bb02f6415203be841dd25a'
     follow_hash = 'd04b0a864b4b54837c0d870b0e77e076'
-
 
     def parse(self, response):
         csrf_token = self.fetch_csrf_token(response.text)
@@ -31,21 +30,26 @@ class InstagramSpider(scrapy.Spider):
             method='POST',
             callback=self.user_parse,
             formdata={
-                'username':self.inst_login,
-                'enc_password':self.inst_pwd
+                'username': self.inst_login,
+                'enc_password': self.inst_pwd
             },
             headers={'X-CSRFToken': csrf_token}
         )
-    def user_parse(self,response: HtmlResponse):
+
+    def user_parse(self, response: HtmlResponse):
         j_body = json.loads(response.text)
         if j_body['authenticated']:
-            yield response.follow(
-                f'/{self.parse_user}',
-                callback=self.user_data_parse,
-                cb_kwargs={
-                    'username': self.parse_user
-                }
-            )
+            parse_user_str = input("Введите имена через пробел: ")
+            parse_user_list = parse_user_str.split()
+            for parse_user in parse_user_list:
+                yield response.follow(
+                    f'/{parse_user}',
+                    callback=self.user_data_parse,
+                    cb_kwargs={
+                        'username': parse_user
+                    }
+                )
+
     def user_data_parse(self, response: HtmlResponse, username):
         user_id = self.fetch_user_id(response.text, username)
         variables = {
@@ -65,6 +69,7 @@ class InstagramSpider(scrapy.Spider):
             }
 
         )
+
     def follower_list_parse(self, response: HtmlResponse, username, user_id, variables):
         j_data = json.loads(response.text)
 
@@ -86,6 +91,7 @@ class InstagramSpider(scrapy.Spider):
             )
         else:
             variables['first'] = 24
+            variables.pop('after')
             url_post = f'{self.graphql_url}query_hash={self.follow_hash}&{urlencode(variables)}'
             yield response.follow(
                 url_post,
@@ -139,10 +145,8 @@ class InstagramSpider(scrapy.Spider):
             loader.add_value('id', follow['node']['id'])
             loader.add_value('username', follow['node']['username'])
             loader.add_value('profile_pic_url', follow['node']['profile_pic_url'])
-            loader.add_value('type', 'follower')
+            loader.add_value('type', 'follow')
             yield loader.load_item()
-
-
 
     def fetch_csrf_token(self, text):
         matched = re.search('\"csrf_token\":\"\\w+\"', text).group()
@@ -153,4 +157,8 @@ class InstagramSpider(scrapy.Spider):
             '{\"id\":\"\\d+\",\"username\":\"%s\"}' % username, text
         ).group()
         return json.loads(matched).get('id')
+
+
+
+
 
